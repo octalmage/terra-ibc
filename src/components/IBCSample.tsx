@@ -6,17 +6,29 @@ import {
   TxResult,
   TxUnspecifiedError,
   useConnectedWallet,
+  useWallet,
   UserDenied,
 } from '@terra-money/wallet-provider';
-import React, { useCallback, useState } from 'react';
-
-const TEST_TO_ADDRESS = 'osmo136vrrpsmxtvpv7lj573z9x83lqylc0ad5qye25';
+import { bech32 } from 'bech32';
+import { useCallback, useState, useEffect } from 'react';
 
 export function IBCSample() {
+  const { status } = useWallet();
   const [txResult, setTxResult] = useState<TxResult | null>(null);
+  const [osmosisAddress, setOsmosisAddress] = useState<string | null>(null);
   const [txError, setTxError] = useState<string | null>(null);
 
   const connectedWallet = useConnectedWallet();
+
+  useEffect(() => {
+    if (status !== 'WALLET_CONNECTED') {
+      return;
+    }
+    
+    // Convert Terra address to Osmosis.
+    const hexAddr = bech32.decode(connectedWallet?.walletAddress as string);
+    setOsmosisAddress(bech32.encode('osmo', hexAddr.words));
+  }, [connectedWallet, status]);
 
   const proceed = useCallback(() => {
     if (!connectedWallet) {
@@ -34,7 +46,7 @@ export function IBCSample() {
             'channel-1', // Osmosis outbound channel
             new Coin('uusd', '1000000'),
             connectedWallet.walletAddress,
-            TEST_TO_ADDRESS,
+            osmosisAddress || '',
             undefined,
             (Date.now() + 60 * 1000) * 1e6
           ),
@@ -62,14 +74,14 @@ export function IBCSample() {
           );
         }
       });
-  }, [connectedWallet]);
+  }, [connectedWallet, osmosisAddress]);
 
   return (
     <div>
       <h1>IBC Sample</h1>
 
       {connectedWallet?.availablePost && !txResult && !txError && (
-        <button onClick={proceed}>Send 1 USD to {TEST_TO_ADDRESS}</button>
+        <button onClick={proceed}>Send 1 USD to {osmosisAddress}</button>
       )}
 
       {txResult && (
