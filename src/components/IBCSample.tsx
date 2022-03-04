@@ -8,8 +8,10 @@ import {
   useConnectedWallet,
   useWallet,
   UserDenied,
+  useLCDClient,
 } from '@terra-money/wallet-provider';
 import { bech32 } from 'bech32';
+import { connected } from 'process';
 import { useCallback, useState, useEffect } from 'react';
 
 export function IBCSample() {
@@ -17,6 +19,8 @@ export function IBCSample() {
   const [txResult, setTxResult] = useState<TxResult | null>(null);
   const [osmosisAddress, setOsmosisAddress] = useState<string | null>(null);
   const [txError, setTxError] = useState<string | null>(null);
+  const [ustBalance, setUSTBalance] = useState<string>('0');
+  const lcd = useLCDClient();
 
   const connectedWallet = useConnectedWallet();
 
@@ -24,11 +28,19 @@ export function IBCSample() {
     if (status !== 'WALLET_CONNECTED') {
       return;
     }
-    
+
     // Convert Terra address to Osmosis.
     const hexAddr = bech32.decode(connectedWallet?.walletAddress as string);
     setOsmosisAddress(bech32.encode('osmo', hexAddr.words));
-  }, [connectedWallet, status]);
+
+    const updateBalance = async () => {
+      const [coins] = await lcd.bank.balance(connectedWallet!.walletAddress);
+      const ust = coins.get('uusd')!.amount.div(1000000).toFixed(0);
+      setUSTBalance(ust);
+    };
+
+    updateBalance();
+  }, [connectedWallet, status, lcd, txResult]);
 
   const proceed = useCallback(() => {
     if (!connectedWallet) {
@@ -43,12 +55,12 @@ export function IBCSample() {
         msgs: [
           new MsgTransfer(
             'transfer',
-            'channel-1', // Osmosis outbound channel
+            'channel-22', // Osmosis outbound channel
             new Coin('uusd', '1000000'),
             connectedWallet.walletAddress,
             osmosisAddress || '',
-            undefined,
-            (Date.now() + 60 * 1000) * 1e6
+            undefined, // Timeout block height
+            (Date.now() + 60 * 1000) * 1e6 // Timeout timestamp
           ),
         ],
       })
@@ -79,9 +91,9 @@ export function IBCSample() {
   return (
     <div>
       <h1>IBC Sample</h1>
-
+      <p>UST Balance: {ustBalance}</p>
       {connectedWallet?.availablePost && !txResult && !txError && (
-        <button onClick={proceed}>Send 1 USD to {osmosisAddress}</button>
+        <button onClick={proceed}>Send 1 UST to {osmosisAddress}</button>
       )}
 
       {txResult && (
